@@ -1,0 +1,352 @@
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { Button } from "../../../components/ui/Button.jsx";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "../../../components/ui/Dialog.jsx";
+import { Input } from "../../../components/ui/Input.jsx";
+import { Label } from "../../../components/ui/Label.jsx";
+import { Plus, Pencil, Trash2, Loader2, Search } from 'lucide-react';
+
+const API_URL = 'http://localhost:4000/v1/api/admin';
+
+export default function SessionManagement() {
+    const [sessions, setSessions] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [searchQuery, setSearchQuery] = useState('');
+
+    // Dialog states
+    const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+    const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+    const [currentSession, setCurrentSession] = useState(null);
+    const [formData, setFormData] = useState({ name: '' });
+    const [submitting, setSubmitting] = useState(false);
+
+    // Fetch sessions on component mount
+    useEffect(() => {
+        fetchSessions();
+    }, []);
+
+    const fetchSessions = async () => {
+        try {
+            setLoading(true);
+            const token = localStorage.getItem('adminToken');
+            const response = await axios.get(`${API_URL}/session`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            setSessions(response.data.sessions);
+            setLoading(false);
+        } catch (err) {
+            console.error('Error fetching sessions:', err);
+            setError('Failed to load sessions');
+            setLoading(false);
+        }
+    };
+
+    const handleInputChange = (e) => {
+        setFormData({ ...formData, [e.target.name]: e.target.value });
+    };
+
+    const handleAddSession = async () => {
+        try {
+            setSubmitting(true);
+            const token = localStorage.getItem('adminToken');
+
+            const response = await axios.post(
+                `${API_URL}/session`,
+                formData,
+                {
+                    headers: { Authorization: `Bearer ${token}` }
+                }
+            );
+
+            setSessions([...sessions, response.data.session]);
+            setIsAddDialogOpen(false);
+            setFormData({ name: '' });
+            setSubmitting(false);
+        } catch (err) {
+            console.error('Error adding session:', err);
+            alert(err.response?.data?.message || 'Failed to add session');
+            setSubmitting(false);
+        }
+    };
+
+    const handleEditSession = async () => {
+        try {
+            setSubmitting(true);
+            const token = localStorage.getItem('adminToken');
+
+            const response = await axios.put(
+                `${API_URL}/session/${currentSession._id}`,
+                formData,
+                {
+                    headers: { Authorization: `Bearer ${token}` }
+                }
+            );
+
+            setSessions(sessions.map(session =>
+                session._id === currentSession._id ? response.data.session : session
+            ));
+
+            setIsEditDialogOpen(false);
+            setCurrentSession(null);
+            setFormData({ name: '' });
+            setSubmitting(false);
+        } catch (err) {
+            console.error('Error updating session:', err);
+            alert(err.response?.data?.message || 'Failed to update session');
+            setSubmitting(false);
+        }
+    };
+
+    const handleDeleteSession = async () => {
+        try {
+            setSubmitting(true);
+            const token = localStorage.getItem('adminToken');
+
+            await axios.delete(`${API_URL}/session/${currentSession._id}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            setSessions(sessions.filter(session => session._id !== currentSession._id));
+            setIsDeleteDialogOpen(false);
+            setCurrentSession(null);
+            setSubmitting(false);
+        } catch (err) {
+            console.error('Error deleting session:', err);
+            alert(err.response?.data?.message || 'Failed to delete session');
+            setSubmitting(false);
+        }
+    };
+
+    const openEditDialog = (session) => {
+        setCurrentSession(session);
+        setFormData({ name: session.name });
+        setIsEditDialogOpen(true);
+    };
+
+    const openDeleteDialog = (session) => {
+        setCurrentSession(session);
+        setIsDeleteDialogOpen(true);
+    };
+
+    // Filter sessions based on search query
+    const filteredSessions = sessions.filter(session =>
+        session.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+    if (loading) return <div className="text-center py-12">Loading sessions...</div>;
+    if (error) return <div className="text-center py-12 text-red-500">{error}</div>;
+
+    return (
+        <div>
+            <div className="flex justify-between items-center mb-6">
+                <h1 className="text-2xl font-bold">Session Management</h1>
+                <div className="flex items-center gap-3">
+                    <div className="relative">
+                        <Search size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                        <Input
+                            placeholder="Search sessions..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="pl-10 w-60 border-gray-300 focus:border-[#025c53] focus:ring-[#025c53]"
+                        />
+                    </div>
+                    <Button
+                        onClick={() => {
+                            setFormData({ name: '' });
+                            setIsAddDialogOpen(true);
+                        }}
+                        style={{ backgroundColor: "#025c53" }}
+                        className="hover:bg-[#01413a] transition-colors text-white font-medium"
+                    >
+                        <Plus size={16} className="mr-2" /> Add Session
+                    </Button>
+                </div>
+            </div>
+
+            {/* Session List */}
+            <div className="bg-white rounded-lg shadow overflow-hidden">
+                <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                        <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Name
+                            </th>
+                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Actions
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                        {filteredSessions.length === 0 ? (
+                            <tr>
+                                <td colSpan="2" className="px-6 py-4 text-center text-gray-500">
+                                    {searchQuery ? 'No sessions match your search' : 'No sessions found'}
+                                </td>
+                            </tr>
+                        ) : (
+                            filteredSessions.map((session) => (
+                                <tr key={session._id}>
+                                    <td className="px-6 py-4 whitespace-nowrap">
+                                        <div className="text-sm font-medium text-gray-900">{session.name}</div>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="mr-2"
+                                            onClick={() => openEditDialog(session)}
+                                        >
+                                            <Pencil size={14} className="mr-1" /> Edit
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="text-red-600 border-red-600 hover:bg-red-50"
+                                            onClick={() => openDeleteDialog(session)}
+                                        >
+                                            <Trash2 size={14} className="mr-1" /> Delete
+                                        </Button>
+                                    </td>
+                                </tr>
+                            ))
+                        )}
+                    </tbody>
+                </table>
+            </div>
+
+            {/* Add Session Dialog */}
+            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+                <DialogContent className="bg-white border-0 shadow-lg rounded-lg">
+                    <DialogHeader className="border-b pb-3">
+                        <DialogTitle className="text-xl font-semibold text-gray-800">Add New Session</DialogTitle>
+                        <DialogDescription className="text-gray-600">
+                            Enter the details for the new session.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-5">
+                        <div className="space-y-2">
+                            <Label htmlFor="name" className="text-gray-700 font-medium">Session Name</Label>
+                            <Input
+                                id="name"
+                                name="name"
+                                value={formData.name}
+                                onChange={handleInputChange}
+                                placeholder="Enter session name (e.g., 2023-2024)"
+                                className="border-gray-300 focus:border-[#025c53] focus:ring-[#025c53]"
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter className="border-t pt-3 mt-2">
+                        <Button
+                            variant="outline"
+                            onClick={() => setIsAddDialogOpen(false)}
+                            disabled={submitting}
+                            className="border-gray-300 text-gray-700 hover:bg-gray-50"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={handleAddSession}
+                            disabled={submitting || !formData.name.trim()}
+                            style={{ backgroundColor: "#025c53" }}
+                            className="hover:bg-[#01413a] transition-colors text-white font-medium"
+                        >
+                            {submitting ? <Loader2 size={16} className="mr-2 animate-spin" /> : null}
+                            Add Session
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Edit Session Dialog */}
+            <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+                <DialogContent className="bg-white border-0 shadow-lg rounded-lg">
+                    <DialogHeader className="border-b pb-3">
+                        <DialogTitle className="text-xl font-semibold text-gray-800">Edit Session</DialogTitle>
+                        <DialogDescription className="text-gray-600">
+                            Update the session details.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-5">
+                        <div className="space-y-2">
+                            <Label htmlFor="edit-name" className="text-gray-700 font-medium">Session Name</Label>
+                            <Input
+                                id="edit-name"
+                                name="name"
+                                value={formData.name}
+                                onChange={handleInputChange}
+                                placeholder="Enter session name"
+                                className="border-gray-300 focus:border-[#025c53] focus:ring-[#025c53]"
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter className="border-t pt-3 mt-2">
+                        <Button
+                            variant="outline"
+                            onClick={() => setIsEditDialogOpen(false)}
+                            disabled={submitting}
+                            className="border-gray-300 text-gray-700 hover:bg-gray-50"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={handleEditSession}
+                            disabled={submitting || !formData.name.trim()}
+                            style={{ backgroundColor: "#025c53" }}
+                            className="hover:bg-[#01413a] transition-colors text-white font-medium"
+                        >
+                            {submitting ? <Loader2 size={16} className="mr-2 animate-spin" /> : null}
+                            Update Session
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Delete Session Dialog */}
+            <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                <DialogContent className="bg-white border-0 shadow-lg rounded-lg">
+                    <DialogHeader className="border-b pb-3">
+                        <DialogTitle className="text-xl font-semibold text-gray-800">Delete Session</DialogTitle>
+                        <DialogDescription className="text-gray-600">
+                            Are you sure you want to delete this session? This action cannot be undone.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-5">
+                        <p className="text-sm text-gray-700">
+                            Session: <span className="font-medium text-[#025c53]">{currentSession?.name}</span>
+                        </p>
+                    </div>
+                    <DialogFooter className="border-t pt-3 mt-2">
+                        <Button
+                            variant="outline"
+                            onClick={() => setIsDeleteDialogOpen(false)}
+                            disabled={submitting}
+                            className="border-gray-300 text-gray-700 hover:bg-gray-50"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={handleDeleteSession}
+                            disabled={submitting}
+                            style={{ backgroundColor: "#dc2626" }}
+                            className="hover:bg-red-700 transition-colors text-white font-medium"
+                        >
+                            {submitting ? <Loader2 size={16} className="mr-2 animate-spin" /> : null}
+                            Delete Session
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </div>
+    );
+}
